@@ -148,7 +148,7 @@ const MOULIN_IMG = "";
 const RSVP_DEADLINE = "2026-06-15";
 
 /* ═══ MENUS — automatiques selon régime ═══ */
-const GARNITURE = { fr: "Purée de pommes de terre accompagnée de ses petits légumes de marché", en: "Mashed potatoes with market vegetables", emoji: "🥔" };
+const GARNITURE = { fr: "Écrasé de pommes de terre", en: "Mashed potatoes", emoji: "🥔" };
 
 const MENU_BY_DIET = {
   standard: {
