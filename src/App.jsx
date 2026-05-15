@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
 /* ═══ SUPABASE ═══ */
-const SUPABASE_URL = "https://xhivzavhvufqohoywrnh.supabase.co";
+const SUPABASE_URL = "https://xhivzavhvufqohoywtnh.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoaXZ6YXZodnVmcW9ob3l3dG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3ODU1MjYsImV4cCI6MjA5NDM2MTUyNn0.LovjKXAyXpv6Sf8ObCpvXFr8AvGbcnzSDYe-_n8hcrc";
 const sbHeaders = { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", "Prefer": "return=minimal" };
 const sbFetch = async (table, method, body, query) => {
