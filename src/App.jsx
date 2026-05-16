@@ -8,117 +8,232 @@ const EMAILJS_URL = "https://api.emailjs.com/api/v1.0/email/send";
 
 function buildEmailHTML(entry, lang) {
   const m = MENU_BY_DIET[entry.menu?.type] || MENU_BY_DIET.standard;
-  const dietLabels = (d) => (Array.isArray(d) ? d : [d || "standard"]).map(x => ({"standard":"Aucune restriction","vegetarien":"Végétarien","pescetarien":"Pescétarien","vegan":"Vegan","sansgluten":"Sans gluten","halal":"Halal","autre":"Autre","lactose":"Intolérant lactose","noix":"Intolérant noix"})[x] || x).join(", ");
-  const alcLabels = (a) => !a?.length ? "–" : a.includes("none") ? "Ne boit pas" : a.map(x => ({"vin":"Vin","champagne":"Champagne","biere":"Bière","fort":"Alcool fort"})[x] || x).join(", ");
   const isY = entry.attendance === "yes";
-  
-  let html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f0f4ed;padding:20px;border-radius:16px">';
-  html += '<h1 style="text-align:center;color:#0d9a5f;font-size:24px">💍 RSVP Mariage Manon & Sebastian</h1>';
-  html += '<hr style="border:1px solid #d4e4d0">';
-  
-  // Invité principal
-  html += '<h2 style="color:#1a2a18;font-size:18px">👤 Invité principal</h2>';
-  html += '<table style="width:100%;border-collapse:collapse">';
-  html += '<tr><td style="padding:6px;color:#6a8a60;width:140px">Nom</td><td style="padding:6px;font-weight:600">' + entry.firstName + ' ' + entry.lastName + '</td></tr>';
-  html += '<tr><td style="padding:6px;color:#6a8a60">Email</td><td style="padding:6px">' + entry.email + '</td></tr>';
-  html += '<tr><td style="padding:6px;color:#6a8a60">Téléphone</td><td style="padding:6px">' + (entry.phone || "–") + '</td></tr>';
-  html += '<tr><td style="padding:6px;color:#6a8a60">Présence</td><td style="padding:6px;font-weight:700;color:' + (isY ? '#087a4a' : '#a05050') + '">' + (isY ? '✓ PRÉSENT' : '✗ ABSENT') + '</td></tr>';
-  html += '</table>';
-  
+
+  // Palette (cohérente avec le site)
+  const C = {
+    green: "#0d9a5f", darkGreen: "#087a4a", gold: "#c8a92e", goldLight: "#f5e9b8",
+    text: "#1a2a18", muted: "#6a8a60", bg: "#f5f7f3", card: "#ffffff",
+    border: "#d4e4d0", attendBg: "#e8f4ec", declineBg: "#fbeaea"
+  };
+
+  // Échappement minimal des entrées utilisateur (sécurité + propreté visuelle)
+  const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  const dietLabels = (d, ot) => {
+    if (!d?.length) return "Aucune restriction";
+    const labels = (Array.isArray(d) ? d : [d])
+      .filter(x => x !== "standard")
+      .map(x => ({
+        "vegetarien": "Végétarien", "pescetarien": "Pescétarien", "vegan": "Vegan",
+        "sansgluten": "Sans gluten", "halal": "Halal", "autre": "Autre",
+        "lactose": "Intolérant lactose", "noix": "Intolérant noix"
+      })[x] || x);
+    if (!labels.length) return "Aucune restriction";
+    let result = labels.join(", ");
+    if (ot) result += ` <span style="color:${C.muted};font-style:italic;">(${esc(ot)})</span>`;
+    return result;
+  };
+
+  const alcLabels = (a) => {
+    if (!a?.length) return "–";
+    if (a.includes("none")) return "Ne boit pas d'alcool";
+    return a.map(x => ({ "vin": "Vin", "champagne": "Champagne", "biere": "Bière", "fort": "Alcool fort" })[x] || x).join(", ");
+  };
+
+  const fmtAddr = (a) => {
+    if (!a?.street) return "–";
+    return `${esc(a.street)}<br/>${esc(a.zip)} ${esc(a.city)}<br/>${esc(a.country)}`;
+  };
+
+  // Helpers de rendu
+  const section = (icon, title) =>
+    `<div style="margin:28px 0 10px;">
+      <div style="font-size:10px;letter-spacing:4px;text-transform:uppercase;color:${C.green};font-weight:bold;font-family:Arial,Helvetica,sans-serif;">${icon} &nbsp;${title}</div>
+      <div style="height:2px;background:linear-gradient(90deg,${C.green},transparent);margin-top:6px;"></div>
+    </div>`;
+
+  const row = (label, value) =>
+    `<tr>
+      <td style="padding:11px 14px;color:${C.muted};width:140px;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid ${C.border};vertical-align:top;">${label}</td>
+      <td style="padding:11px 14px;color:${C.text};font-size:14px;border-bottom:1px solid ${C.border};">${value}</td>
+    </tr>`;
+
+  const menuItem = (label, item) =>
+    `<tr>
+      <td style="padding:13px 14px;color:${C.muted};width:120px;font-size:10px;letter-spacing:2px;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid ${C.border};vertical-align:top;">${label}</td>
+      <td style="padding:13px 14px;color:${C.text};font-size:14px;border-bottom:1px solid ${C.border};line-height:1.5;">
+        <span style="font-size:18px;margin-right:6px;">${item?.emoji || ""}</span>${item?.fr || "–"}
+      </td>
+    </tr>`;
+
+  const card = (content) =>
+    `<table style="width:100%;border-collapse:collapse;background:${C.card};border-radius:12px;overflow:hidden;border:1px solid ${C.border};margin-bottom:6px;">${content}</table>`;
+
+  // Données menu invité principal
+  const choices = entry.menu?.choices || { entree: "A", plat: "A" };
+  const isStd = (entry.menu?.type || "standard") === "standard";
+  const entreeItem = isStd ? (choices.entree === "B" ? m.entreeB : m.entreeA) : m.entree;
+  const platItem = isStd ? (choices.plat === "B" ? m.platB : m.platA) : m.plat;
+
+  // ===== CONSTRUCTION =====
+  let html = `<div style="font-family:Georgia,'Times New Roman',serif;max-width:640px;margin:0 auto;background:${C.bg};color:${C.text};">`;
+
+  // En-tête principal
+  html += `
+    <div style="background:linear-gradient(135deg,${C.darkGreen},${C.green});padding:42px 24px;text-align:center;color:#fff;">
+      <div style="font-size:10px;letter-spacing:5px;text-transform:uppercase;opacity:0.85;margin-bottom:16px;font-family:Arial,Helvetica,sans-serif;font-weight:bold;">Nouvelle réponse RSVP</div>
+      <div style="font-size:40px;font-style:italic;letter-spacing:2px;line-height:1.1;">Manon <span style="color:${C.goldLight};font-style:normal;font-weight:500;">&</span> Sebastian</div>
+      <div style="font-size:11px;letter-spacing:4px;text-transform:uppercase;margin-top:20px;opacity:0.9;font-family:Arial,Helvetica,sans-serif;">12 Septembre 2026 · Moulin de Pommeuse</div>
+    </div>
+  `;
+
+  // Bandeau invité avec statut
+  const statusColor = isY ? C.darkGreen : "#a05050";
+  const statusBg = isY ? C.attendBg : C.declineBg;
+  const statusBorder = isY ? C.gold : "#d4a8a8";
+  const statusText = isY ? "✓ Sera présent(e)" : "✗ Ne pourra pas venir";
+  html += `
+    <div style="background:${statusBg};padding:28px;border-bottom:3px solid ${statusBorder};text-align:center;">
+      <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:${C.muted};margin-bottom:8px;font-family:Arial,Helvetica,sans-serif;font-weight:bold;">De la part de</div>
+      <div style="font-size:30px;font-style:italic;color:${C.text};font-family:Georgia,serif;line-height:1.2;">${esc(entry.firstName)} ${esc(entry.lastName)}</div>
+      <div style="display:inline-block;font-size:13px;font-weight:bold;color:${statusColor};margin-top:14px;padding:7px 20px;background:#fff;border-radius:22px;font-family:Arial,Helvetica,sans-serif;letter-spacing:1px;">${statusText}</div>
+    </div>
+  `;
+
+  // Corps
+  html += `<div style="padding:8px 24px 28px;">`;
+
+  // Coordonnées
+  html += section("👤", "Coordonnées");
+  html += card(
+    row("Email", `<a href="mailto:${esc(entry.email)}" style="color:${C.green};text-decoration:none;">${esc(entry.email)}</a>`) +
+    row("Téléphone", esc(entry.phone) || "–") +
+    row("Adresse", fmtAddr(entry.address))
+  );
+
   if (isY) {
-    // Régime & Menu
-    html += '<h2 style="color:#1a2a18;font-size:18px;margin-top:20px">🍽 Régime & Menu</h2>';
-    html += '<table style="width:100%;border-collapse:collapse">';
-    html += '<tr><td style="padding:6px;color:#6a8a60;width:140px">Régime</td><td style="padding:6px">' + dietLabels(entry.diet) + (entry.dietOt ? ' (' + entry.dietOt + ')' : '') + '</td></tr>';
-    html += '<tr><td style="padding:6px;color:#6a8a60">Menu attribué</td><td style="padding:6px;font-weight:600;color:#c8a92e">' + (entry.menu?.type || "standard").toUpperCase() + '</td></tr>';
-    const ch = entry.menu?.choices || { entree: "A", plat: "A", garniture: "A" };
-    const isStd = (entry.menu?.type || "standard") === "standard";
-    const entreeItem = isStd ? (ch.entree === "B" ? m.entreeB : m.entreeA) : m.entree;
-    const platItem = isStd ? (ch.plat === "B" ? m.platB : m.platA) : m.plat;
-    const garItem = m.garniture;
-    html += '<tr><td style="padding:6px;color:#6a8a60">🥟 Entrée</td><td style="padding:6px">' + (entreeItem?.fr || "–") + '</td></tr>';
-    html += '<tr><td style="padding:6px;color:#6a8a60">🍽 Plat</td><td style="padding:6px">' + (platItem?.fr || "–") + '</td></tr>';
-    html += '<tr><td style="padding:6px;color:#6a8a60">🥔 Garniture</td><td style="padding:6px">' + (garItem?.fr || "–") + '</td></tr>';
-    if (m.dessert) html += '<tr><td style="padding:6px;color:#6a8a60">🍰 Dessert</td><td style="padding:6px">' + m.dessert.fr + '</td></tr>';
-    html += '<tr><td style="padding:6px;color:#6a8a60">🍷 Alcool</td><td style="padding:6px">' + alcLabels(entry.alcohol) + '</td></tr>';
-    html += '</table>';
-    
+    // Régime
+    html += section("🥗", "Régime alimentaire");
+    html += card(
+      row("Régime", dietLabels(entry.diet, entry.dietOt)) +
+      row("Menu attribué", `<span style="font-weight:bold;color:${C.gold};letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;">${(entry.menu?.type || "standard").toUpperCase()}</span>`)
+    );
+
+    // Menu
+    html += section("🍽", "Menu");
+    let menuContent = menuItem("Entrée", entreeItem) + menuItem("Plat", platItem);
+    if (m.garniture) menuContent += menuItem("Garniture", m.garniture);
+    if (m.dessert) menuContent += menuItem("Dessert", m.dessert);
+    menuContent += row("Alcool", alcLabels(entry.alcohol));
+    html += card(menuContent);
+
     // Accompagnant
     if (entry.companion) {
       const cm = MENU_BY_DIET[entry.companion.menu?.type] || MENU_BY_DIET.standard;
-      html += '<h2 style="color:#1a2a18;font-size:18px;margin-top:20px">♡ Accompagnant</h2>';
-      html += '<table style="width:100%;border-collapse:collapse">';
-      html += '<tr><td style="padding:6px;color:#6a8a60;width:140px">Nom</td><td style="padding:6px;font-weight:600">' + entry.companion.firstName + ' ' + entry.companion.lastName + '</td></tr>';
-      html += '<tr><td style="padding:6px;color:#6a8a60">Régime</td><td style="padding:6px">' + dietLabels(entry.companion.diet) + (entry.companion.dietOt ? ' (' + entry.companion.dietOt + ')' : '') + '</td></tr>';
-      html += '<tr><td style="padding:6px;color:#6a8a60">Menu</td><td style="padding:6px;font-weight:600;color:#c8a92e">' + (entry.companion.menu?.type || "standard").toUpperCase() + '</td></tr>';
-      const coCh = entry.companion.menu?.choices || { entree: "A", plat: "A", garniture: "A" };
+      const coCh = entry.companion.menu?.choices || { entree: "A", plat: "A" };
       const coIsStd = (entry.companion.menu?.type || "standard") === "standard";
       const coEntree = coIsStd ? (coCh.entree === "B" ? cm.entreeB : cm.entreeA) : cm.entree;
       const coPlat = coIsStd ? (coCh.plat === "B" ? cm.platB : cm.platA) : cm.plat;
-      const coGar = cm.garniture;
-      html += '<tr><td style="padding:6px;color:#6a8a60">🥟 Entrée</td><td style="padding:6px">' + (coEntree?.fr || "–") + '</td></tr>';
-      html += '<tr><td style="padding:6px;color:#6a8a60">🍽 Plat</td><td style="padding:6px">' + (coPlat?.fr || "–") + '</td></tr>';
-      html += '<tr><td style="padding:6px;color:#6a8a60">🥔 Garniture</td><td style="padding:6px">' + (coGar?.fr || "–") + '</td></tr>';
-      if (cm.dessert) html += '<tr><td style="padding:6px;color:#6a8a60">🍰 Dessert</td><td style="padding:6px">' + cm.dessert.fr + '</td></tr>';
-      html += '<tr><td style="padding:6px;color:#6a8a60">🍷 Alcool</td><td style="padding:6px">' + alcLabels(entry.companion.alcohol) + '</td></tr>';
-      html += '</table>';
+
+      html += section("♡", `Accompagnant — ${esc(entry.companion.firstName)} ${esc(entry.companion.lastName)}`);
+      let coContent =
+        row("Régime", dietLabels(entry.companion.diet, entry.companion.dietOt)) +
+        row("Menu", `<span style="font-weight:bold;color:${C.gold};letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;">${(entry.companion.menu?.type || "standard").toUpperCase()}</span>`) +
+        menuItem("Entrée", coEntree) +
+        menuItem("Plat", coPlat);
+      if (cm.garniture) coContent += menuItem("Garniture", cm.garniture);
+      if (cm.dessert) coContent += menuItem("Dessert", cm.dessert);
+      coContent += row("Alcool", alcLabels(entry.companion.alcohol));
+      html += card(coContent);
     }
-    
+
     // Enfants
     if (entry.children?.length) {
-      html += '<h2 style="color:#1a2a18;font-size:18px;margin-top:20px">★ Enfants (' + entry.children.length + ')</h2>';
-      entry.children.forEach(c => {
-        html += '<div style="background:#fff;padding:10px 14px;border-radius:10px;margin-bottom:8px;border:1px solid #d4e4d0">';
-        html += '<strong>' + c.name + '</strong> — ' + c.age + ' ans<br>';
-        html += 'Régime: ' + dietLabels(c.diet) + (c.dietOt ? ' (' + c.dietOt + ')' : '');
-        html += '</div>';
+      html += section("★", `Enfants (${entry.children.length})`);
+      let kidsContent = "";
+      entry.children.forEach((c, i) => {
+        const isLast = i === entry.children.length - 1;
+        kidsContent += `
+          <tr>
+            <td style="padding:16px 14px;border-bottom:${isLast ? 'none' : `1px solid ${C.border}`};">
+              <div style="font-size:16px;font-weight:bold;color:${C.text};margin-bottom:6px;font-family:Georgia,serif;">${esc(c.name)} <span style="color:${C.muted};font-weight:normal;font-size:13px;font-style:italic;">— ${esc(c.age)} ans</span></div>
+              <div style="font-size:13px;color:${C.muted};font-family:Arial,Helvetica,sans-serif;">Régime : ${dietLabels(c.diet, c.dietOt)}</div>
+              ${c.allergy ? `<div style="font-size:13px;color:#a05050;font-family:Arial,Helvetica,sans-serif;margin-top:4px;font-weight:bold;">⚠ Allergies : ${esc(c.allergy)}</div>` : ""}
+            </td>
+          </tr>
+        `;
       });
+      html += card(kidsContent);
     }
-    
+
     // Hébergement
-    html += '<h2 style="color:#1a2a18;font-size:18px;margin-top:20px">🏡 Hébergement</h2>';
-    html += '<table style="width:100%;border-collapse:collapse">';
+    html += section("🏡", "Hébergement");
     if (entry.accom !== "none") {
-      html += '<tr><td style="padding:6px;color:#6a8a60;width:140px">Nuits</td><td style="padding:6px;font-weight:600">' + (entry.accom === "fri-sun" ? "Vendredi → Dimanche" : "Samedi → Dimanche") + '</td></tr>';
-      html += '<tr><td style="padding:6px;color:#6a8a60">💰 Prix chambre</td><td style="padding:6px;font-weight:700;color:#0d9a5f">' + entry.accomPrice + ' €</td></tr>';
+      html += card(
+        row("Nuits", entry.accom === "fri-sun" ? "Vendredi → Dimanche (2 nuits)" : "Samedi → Dimanche (1 nuit)") +
+        row("Type de chambre", entry.roomSize === "3" ? "3 personnes et plus" : "1–2 personnes") +
+        row("Prix chambre", `<span style="font-weight:bold;color:${C.green};font-size:16px;">${entry.accomPrice} €</span>`)
+      );
     } else {
-      html += '<tr><td style="padding:6px;color:#888">Pas d\'hébergement</td></tr>';
+      html += card(row("Statut", `<span style="color:${C.muted};font-style:italic;">Pas d'hébergement sur place</span>`));
     }
-    html += '</table>';
-    
+
     // Petit-déjeuner
     if (entry.bfSat > 0 || entry.bfSun > 0) {
-      html += '<h2 style="color:#1a2a18;font-size:18px;margin-top:20px">🥐 Petit-déjeuner</h2>';
-      html += '<table style="width:100%;border-collapse:collapse">';
-      if (entry.bfSat > 0) html += '<tr><td style="padding:6px;color:#6a8a60">Samedi matin</td><td style="padding:6px">' + entry.bfSat + ' pers.</td></tr>';
-      if (entry.bfSun > 0) html += '<tr><td style="padding:6px;color:#6a8a60">Dimanche matin</td><td style="padding:6px">' + entry.bfSun + ' pers.</td></tr>';
-      html += '<tr><td style="padding:6px;color:#6a8a60">💰 Prix petit-déj</td><td style="padding:6px;font-weight:700;color:#c8a92e">' + entry.bfPrice + ' €</td></tr>';
-      html += '</table>';
+      html += section("🥐", "Petit-déjeuner");
+      let bfContent = "";
+      if (entry.bfSat > 0) bfContent += row("Samedi matin", `${entry.bfSat} pers.`);
+      if (entry.bfSun > 0) bfContent += row("Dimanche matin", `${entry.bfSun} pers.`);
+      bfContent += row("Prix petit-déj", `<span style="font-weight:bold;color:${C.gold};font-size:16px;">${entry.bfPrice} €</span>`);
+      html += card(bfContent);
     }
-    
+
     // BBQ
-    html += '<h2 style="color:#1a2a18;font-size:18px;margin-top:20px">🔥 Barbecue dimanche</h2>';
-    html += '<p style="font-size:16px;font-weight:600">' + (entry.bbq === "yes" ? "✓ OUI" : "✗ NON") + '</p>';
-    
+    html += section("🔥", "Barbecue dimanche");
+    html += card(
+      row("Présence au BBQ", entry.bbq === "yes"
+        ? `<span style="font-weight:bold;color:${C.darkGreen};">✓ Reste pour le BBQ</span>`
+        : `<span style="color:${C.muted};">Non</span>`)
+    );
+
     // Total
-    html += '<div style="background:#087a4a;color:#fff;padding:16px;border-radius:12px;text-align:center;margin-top:20px">';
-    html += '<div style="font-size:14px;opacity:.8">TOTAL À RÉCUPÉRER</div>';
-    html += '<div style="font-size:28px;font-weight:700">' + (entry.accomPrice + entry.bfPrice) + ' €</div>';
-    html += '<div style="font-size:12px;opacity:.7">Chambre: ' + entry.accomPrice + '€ · Petit-déj: ' + entry.bfPrice + '€</div>';
-    html += '</div>';
-    
-    // Message
-    if (entry.message) {
-      html += '<div style="background:#fff;padding:16px;border-radius:12px;margin-top:16px;border-left:4px solid #c8a92e">';
-      html += '<div style="font-size:12px;color:#6a8a60;margin-bottom:6px">💌 Message de l\'invité</div>';
-      html += '<div style="font-size:14px;color:#1a2a18;font-style:italic">' + entry.message + '</div>';
-      html += '</div>';
+    const total = (entry.accomPrice || 0) + (entry.bfPrice || 0);
+    if (total > 0) {
+      html += `
+        <div style="background:linear-gradient(135deg,${C.darkGreen},${C.green});color:#fff;padding:28px 24px;border-radius:14px;text-align:center;margin:24px 0 16px;">
+          <div style="font-size:10px;letter-spacing:4px;text-transform:uppercase;opacity:0.85;font-family:Arial,Helvetica,sans-serif;font-weight:bold;margin-bottom:10px;">Total à récupérer</div>
+          <div style="font-size:46px;font-weight:bold;font-family:Georgia,serif;line-height:1;">${total} €</div>
+          <div style="font-size:12px;opacity:0.85;margin-top:12px;font-family:Arial,Helvetica,sans-serif;">
+            Chambre : ${entry.accomPrice} € &nbsp;·&nbsp; Petit-déj : ${entry.bfPrice} €
+          </div>
+        </div>
+      `;
     }
   }
-  
-  html += '<hr style="border:1px solid #d4e4d0;margin-top:20px">';
-  html += '<p style="text-align:center;color:#888;font-size:12px">Envoyé depuis le site RSVP · Mariage Manon & Sebastian · 12 Septembre 2026</p>';
-  html += '</div>';
+
+  // Message (présent ou absent)
+  if (entry.message) {
+    html += `
+      <div style="background:${C.card};padding:24px;border-radius:14px;margin-top:16px;border:1px solid ${C.border};border-left:5px solid ${C.gold};">
+        <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:${C.gold};font-weight:bold;font-family:Arial,Helvetica,sans-serif;margin-bottom:10px;">💌 Mot de l'invité</div>
+        <div style="font-size:17px;color:${C.text};font-style:italic;font-family:Georgia,serif;line-height:1.6;">« ${esc(entry.message)} »</div>
+      </div>
+    `;
+  }
+
+  html += `</div>`; // fin corps
+
+  // Pied de page
+  html += `
+    <div style="background:${C.darkGreen};color:#fff;padding:26px 24px;text-align:center;">
+      <div style="font-family:Georgia,serif;font-size:20px;font-style:italic;letter-spacing:2px;margin-bottom:6px;">Manon <span style="color:${C.goldLight};">&</span> Sebastian</div>
+      <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;opacity:0.85;font-family:Arial,Helvetica,sans-serif;">12 Septembre 2026 · Moulin de Pommeuse</div>
+      <div style="font-size:11px;opacity:0.65;margin-top:14px;font-family:Arial,Helvetica,sans-serif;">Récapitulatif RSVP automatique · Reçu le ${entry.date}</div>
+    </div>
+  `;
+
+  html += `</div>`; // fin wrapper
   return html;
 }
 
@@ -144,8 +259,10 @@ async function sendEmailJS(entry, lang) {
 
 /* ═══ CONFIG ═══ */
 const CAGNOTTE_URL = "";
-const MOULIN_IMG = "";
-const RSVP_DEADLINE = "2026-06-15";
+const RSVP_DEADLINE = "2026-06-20";
+// Image bannière : déposer le fichier dans le dossier `public/` de ton projet
+// (par exemple `public/moulin.jpg`), puis garder le chemin tel quel ci-dessous.
+const MOULIN_IMG = "/moulin.jpg";
 
 /* ═══ MENUS — automatiques selon régime ═══ */
 const GARNITURE = { fr: "Écrasé de pommes de terre", en: "Mashed potatoes", emoji: "🥔" };
@@ -255,7 +372,7 @@ const TR = {
   fr: {
     sub: "Confirmez votre présence", intro: "Nous serions touchés de votre présence.",
     att: "Présence", yes: "Je serai là ✓", no: "Je ne pourrai pas",
-    fn: "Prénom", ln: "Nom", email: "E-mail", phone: "Téléphone", diet: "Régime alimentaire", dietOther: "Précisez", dietOtherPh: "Allergies, intolérances...", dietHint: "Plusieurs choix possibles",
+    fn: "Prénom", ln: "Nom", email: "E-mail", phone: "Téléphone", addrL: "Adresse", cityL: "Ville", zipL: "Code postal", countryL: "Pays", diet: "Régime alimentaire", dietOther: "Précisez", dietOtherPh: "Allergies, intolérances...", dietHint: "Plusieurs choix possibles",
     diets: { standard: "Aucune restriction", vegetarien: "Végétarien", pescetarien: "Pescétarien", vegan: "Vegan", sansgluten: "Sans gluten", halal: "Halal", autre: "Autre" },
     compQ: "Accompagné(e) ?", compT: "Accompagnant(e)", oui: "Oui", non: "Non",
     childQ: "Avec des enfants ?", childT: "Enfant", childN: "Prénom", childA: "Âge",
@@ -303,7 +420,7 @@ const TR = {
     deleteConfirm: "Voulez-vous vraiment supprimer ce profil ?", deleteBtn: "Supprimer", close: "Annuler",
     nFS: "Ven→Dim", nSS: "Sam→Dim", noAc: "–", p1: "+1", yrs: "ans", ch: "enfant", chs: "enfants", mFor: "Menu de",
     detEntree: "Entrée", detPlat: "Plat", detGar: "Garnitures", detDessert: "Dessert", detAlc: "Alcool", detAc: "Hébergement", detBf: "Petit-déj", detBbq: "BBQ", detMsg: "Message", detComp: "Accompagnant", detChildren: "Enfants", detDiet: "Régime",
-    deadlineMsg: "Merci de confirmer avant le 15 juin 2026",
+    deadlineMsg: "Merci de confirmer avant le 20 juin 2026",
     faqT: "Questions fréquentes",
     exportBtn: "📥 Exporter CSV", mealCountT: "Compteur plats",
     loveT: "Notre histoire", loveSoon: "À venir...",
@@ -313,7 +430,7 @@ const TR = {
   en: {
     sub: "Please confirm your attendance", intro: "We would be honoured by your presence.",
     att: "Attendance", yes: "I'll be there ✓", no: "I can't make it",
-    fn: "First name", ln: "Last name", email: "Email", phone: "Phone", diet: "Dietary requirements", dietOther: "Specify", dietOtherPh: "Allergies, intolerances...", dietHint: "Multiple choices allowed",
+    fn: "First name", ln: "Last name", email: "Email", phone: "Phone", addrL: "Address", cityL: "City", zipL: "Postal code", countryL: "Country", diet: "Dietary requirements", dietOther: "Specify", dietOtherPh: "Allergies, intolerances...", dietHint: "Multiple choices allowed",
     diets: { standard: "No restrictions", vegetarien: "Vegetarian", pescetarien: "Pescatarian", vegan: "Vegan", sansgluten: "Gluten-free", halal: "Halal", autre: "Other" },
     compQ: "Bringing a +1?", compT: "Companion", oui: "Yes", non: "No",
     childQ: "Bringing children?", childT: "Child", childN: "First name", childA: "Age",
@@ -361,7 +478,7 @@ const TR = {
     deleteConfirm: "Are you sure you want to delete this profile?", deleteBtn: "Delete", close: "Cancel",
     nFS: "Fri→Sun", nSS: "Sat→Sun", noAc: "–", p1: "+1", yrs: "y/o", ch: "child", chs: "children", mFor: "Menu for",
     detEntree: "Starter", detPlat: "Main", detGar: "Sides", detDessert: "Dessert", detAlc: "Alcohol", detAc: "Accommodation", detBf: "Breakfast", detBbq: "BBQ", detMsg: "Message", detComp: "Companion", detChildren: "Children", detDiet: "Diet",
-    deadlineMsg: "Please confirm before June 15, 2026",
+    deadlineMsg: "Please confirm before June 20, 2026",
     faqT: "Frequently asked questions",
     exportBtn: "📥 Export CSV", mealCountT: "Meal counter",
     loveT: "Our story", loveSoon: "Coming soon...",
@@ -403,7 +520,6 @@ function AlcoholSelect({ value, onChange, t }) {
 }
 function MenuDisplay({ lang, diets, dietOt, personName, t, choices, onChoice }) {
   const menu = getMenuForDiet(diets, dietOt); const mt = getMenuType(diets, dietOt); const isStd = mt === "standard"; const adapted = !isStd;
-  const hasGarChoice = false;
   const Item = ({ label, item }) => <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", background: "rgba(13,154,95,.05)", border: "1.5px solid rgba(13,154,95,.1)", borderRadius: "14px", marginBottom: "8px" }}>
     <span style={{ fontSize: "22px", width: "36px", height: "36px", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(13,154,95,.08)", flexShrink: 0 }}>{item.emoji}</span>
     <div><div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "#6a8a60", fontWeight: 600, marginBottom: "2px" }}>{label}</div><div style={{ fontSize: "14px", color: "#1a2a18", fontWeight: 500, lineHeight: 1.4 }}>{item[lang]}</div></div>
@@ -428,11 +544,7 @@ function MenuDisplay({ lang, diets, dietOt, personName, t, choices, onChoice }) 
       <Item label={t.entL} item={menu.entree} />
       <Item label={t.platL} item={menu.plat} />
     </>}
-    {hasGarChoice ? <>
-      <ChoiceLabel text={t.garL} />
-      <ChoiceItem item={menu.garnitureA} selected={choices.garniture !== "B"} onClick={() => onChoice({ ...choices, garniture: "A" })} />
-      <ChoiceItem item={menu.garnitureB} selected={choices.garniture === "B"} onClick={() => onChoice({ ...choices, garniture: "B" })} />
-    </> : menu.garniture && <Item label={t.garL} item={menu.garniture} />}
+    {menu.garniture && <Item label={t.garL} item={menu.garniture} />}
     {menu.dessert && <Item label={t.detDessert || "Dessert"} item={menu.dessert} />}
   </div>;
 }
@@ -459,15 +571,15 @@ export default function App() {
   const [lang, setLang] = useState("fr"); const [view, setView] = useState("form"); const [step, setStep] = useState(0);
   const [att, setAtt] = useState("yes");
   const [fn, setFn] = useState(""); const [ln, setLn] = useState(""); const [em, setEm] = useState(""); const [phone, setPhone] = useState(""); const [phoneCode, setPhoneCode] = useState("+33");
+  const [addr, setAddr] = useState(""); const [city, setCity] = useState(""); const [zip, setZip] = useState(""); const [country, setCountry] = useState("France");
   const [di, setDi] = useState(["standard"]); const [diOt, setDiOt] = useState("");
   const [alc, setAlc] = useState([]); const [msg, setMsg] = useState("");
   const [menuCh, setMenuCh] = useState({ entree: "A", plat: "A", garniture: "A" });
   const [coMenuCh, setCoMenuCh] = useState({ entree: "A", plat: "A", garniture: "A" });
-  const [myE, setMyE] = useState(""); const [myP, setMyP] = useState(""); const [myG, setMyG] = useState([]);
   const [hasCo, setHasCo] = useState(false);
   const [coFn, setCoFn] = useState(""); const [coLn, setCoLn] = useState("");
   const [coDi, setCoDi] = useState(["standard"]); const [coDiOt, setCoDiOt] = useState("");
-  const [coAlc, setCoAlc] = useState([]); const [coE, setCoE] = useState(""); const [coP, setCoP] = useState(""); const [coG, setCoG] = useState([]);
+  const [coAlc, setCoAlc] = useState([]);
   const [hasCh, setHasCh] = useState(false); const [kids, setKids] = useState([mkKid()]);
   const [accom, setAccom] = useState("none"); const [roomSize, setRoomSize] = useState("12");
   const [bfSat, setBfSat] = useState(0); const [bfSun, setBfSun] = useState(0); const [bbq, setBbq] = useState("");
@@ -481,8 +593,6 @@ export default function App() {
 
   useEffect(() => { try { setRsvps(JSON.parse(localStorage.getItem("ms_rsvps_v30") || "[]")); } catch(e){} }, []);
   const save = (l) => { setRsvps(l); try { localStorage.setItem("ms_rsvps_v30", JSON.stringify(l)); } catch(e){} };
-  useEffect(() => { setMyE(""); setMyP(""); }, [di]);
-  useEffect(() => { setCoE(""); setCoP(""); }, [coDi]);
   useEffect(() => { topRef.current?.scrollIntoView({ behavior: "smooth" }); }, [step, view]);
 
   const totalSteps = att === "yes" ? 4 : 2;
@@ -505,7 +615,7 @@ export default function App() {
   const doSubmit = async () => {
     setSubmitting(true);
     const totalBf = (accom === "fri-sun" ? bfSat + bfSun : accom === "sat-sun" ? bfSun : 0);
-    const entry = { id: Date.now(), firstName: fn.trim(), lastName: ln.trim(), email: em.trim(), phone: phoneCode + phone.trim(), attendance: att,
+    const entry = { id: Date.now(), firstName: fn.trim(), lastName: ln.trim(), email: em.trim(), phone: phoneCode + phone.trim(), address: { street: addr.trim(), city: city.trim(), zip: zip.trim(), country: country.trim() }, attendance: att,
       diet: att === "yes" ? di : [], dietOt: di.includes("autre") ? diOt.trim() : "", alcohol: att === "yes" ? alc : [],
       message: att === "yes" ? msg.trim() : "",
       menu: att === "yes" ? { type: getMenuType(di, diOt), choices: menuCh } : null,
@@ -519,12 +629,11 @@ export default function App() {
     await Promise.all([sendEmailJS(entry, lang), genAi(entry)]); setSubmitting(false);
   };
 
-  const reset = () => { setFn(""); setLn(""); setEm(""); setPhone(""); setPhoneCode("+33"); setDi(["standard"]); setDiOt(""); setAlc([]); setMsg(""); setMenuCh({ entree: "A", plat: "A", garniture: "A" }); setCoMenuCh({ entree: "A", plat: "A", garniture: "A" }); setMyE(""); setMyP(""); setMyG([]); setHasCo(false); setCoFn(""); setCoLn(""); setCoDi(["standard"]); setCoDiOt(""); setCoAlc([]); setCoE(""); setCoP(""); setCoG([]); setHasCh(false); setKids([mkKid()]); setAccom("none"); setRoomSize("12"); setBfSat(0); setBfSun(0); setBbq(""); setAtt("yes"); setStep(0); setErrs({}); setAiMsg(""); setView("form"); setSubmitting(false); };
+  const reset = () => { setFn(""); setLn(""); setEm(""); setPhone(""); setPhoneCode("+33"); setAddr(""); setCity(""); setZip(""); setCountry("France"); setDi(["standard"]); setDiOt(""); setAlc([]); setMsg(""); setMenuCh({ entree: "A", plat: "A", garniture: "A" }); setCoMenuCh({ entree: "A", plat: "A", garniture: "A" }); setHasCo(false); setCoFn(""); setCoLn(""); setCoDi(["standard"]); setCoDiOt(""); setCoAlc([]); setHasCh(false); setKids([mkKid()]); setAccom("none"); setRoomSize("12"); setBfSat(0); setBfSun(0); setBbq(""); setAtt("yes"); setStep(0); setErrs({}); setAiMsg(""); setView("form"); setSubmitting(false); };
   const updateKid = useCallback((i, f, v) => { setKids(prev => { const c = [...prev]; c[i] = { ...c[i], [f]: v }; return c; }); }, []);
   const removeKid = useCallback(i => setKids(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : prev), []);
   const addKid = useCallback(() => setKids(prev => [...prev, mkKid()]), []);
 
-  const yR = rsvps.filter(r => r.attendance === "yes");
   const dl = (d) => { if (!d?.length) return ""; return (Array.isArray(d) ? d : [d]).filter(x => x !== "standard").map(x => t.diets[x] || x).join(", "); };
 
   const NavBtns = ({ showSend }) => <div style={{ display: "flex", gap: "10px", marginTop: "28px" }}>
@@ -551,8 +660,8 @@ export default function App() {
     <div style={st.root}><style>{CSS}</style><div ref={topRef} />
       <div style={st.langBar}><button style={st.langBtn(lang === "fr")} onClick={() => setLang("fr")}>FR</button><span style={{ color: "rgba(13,154,95,.2)" }}>|</span><button style={st.langBtn(lang === "en")} onClick={() => setLang("en")}>EN</button></div>
       <div style={st.hero}><div style={st.heroBg} /><div style={{ position: "relative", zIndex: 1 }}>
-        {/* Photo placeholder */}
-        <div style={{ width: "100%", maxWidth: "520px", height: "120px", borderRadius: "18px", margin: "0 auto 16px", background: "linear-gradient(135deg, rgba(13,154,95,.1), rgba(200,169,46,.1))", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid rgba(255,255,255,.5)" }}><span style={{ fontSize: "14px", color: "#6a8a60", fontStyle: "italic" }}>🏡 Moulin de Pommeuse</span></div>
+        {/* Photo bannière — image dans public/moulin.jpg */}
+        <img src={MOULIN_IMG} alt="Moulin de Pommeuse" style={{ width: "100%", maxWidth: "520px", height: "180px", objectFit: "cover", borderRadius: "18px", margin: "0 auto 16px", display: "block", border: "2px solid rgba(255,255,255,.5)", boxShadow: "0 8px 24px rgba(0,0,0,.08)" }} onError={(e) => { e.target.style.display = "none"; }} />
         <div style={st.namesLine}>Manon <span style={st.ampI}>&</span> Sebastian</div>
         <Countdown lang={lang} />
         <a href={CAL_URL} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", fontSize: "12px", color: "#2a5a30", background: "rgba(13,154,95,.08)", padding: "7px 18px", borderRadius: "22px", fontWeight: 500, textDecoration: "none" }}>📅 {t.date} — {t.saveD}</a>
@@ -584,7 +693,10 @@ export default function App() {
           {step === 0 && <>
             <div style={{ marginBottom: "20px" }}><label style={st.lbl}>{t.att}</label><div style={st.togWrap}><button style={st.tog(att === "yes", "yes")} onClick={() => setAtt("yes")}>{t.yes}</button><button style={st.tog(att === "no", "no")} onClick={() => setAtt("no")}>{t.no}</button></div></div>
             <div style={st.card}><div style={st.row2}><div><label style={st.lbl}>{t.fn}</label><input style={st.inp} value={fn} onChange={e => setFn(e.target.value)} /><Err show={errs.fn} text={t.req} /></div><div><label style={st.lbl}>{t.ln}</label><input style={st.inp} value={ln} onChange={e => setLn(e.target.value)} /><Err show={errs.ln} text={t.req} /></div></div><div style={{ marginTop: "14px" }}><label style={st.lbl}>{t.email}</label><input style={st.inp} type="email" value={em} onChange={e => setEm(e.target.value)} /><Err show={errs.em} text={t.badE} /></div>
-              <div style={{ marginTop: "14px" }}><label style={st.lbl}>{t.phone}</label><div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}><select value={phoneCode} onChange={e => setPhoneCode(e.target.value)} style={{ border: "none", borderBottom: "2px solid rgba(13,154,95,.15)", background: "transparent", padding: "10px 0", fontFamily: "'DM Sans'", fontSize: "14px", color: "#1a2a18", outline: "none", borderRadius: 0, width: "90px", cursor: "pointer" }}>{PHONE_CODES.map(c => <option key={c.code} value={c.code}>{c.flag} {c.code}</option>)}</select><input style={{ ...st.inp, flex: 1 }} type="tel" value={phone} onChange={e => setPhone(e.target.value.replace(/[^0-9]/g, ""))} placeholder="6 12 34 56 78" /></div></div>{att === "yes" && <div style={{ marginTop: "16px" }}><label style={st.lbl}>{t.diet}</label><DietMultiSelect value={di} onChange={setDi} otVal={diOt} onOtChange={setDiOt} errOt={errs.diOt} t={t} /></div>}</div>
+              <div style={{ marginTop: "14px" }}><label style={st.lbl}>{t.phone}</label><div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}><select value={phoneCode} onChange={e => setPhoneCode(e.target.value)} style={{ border: "none", borderBottom: "2px solid rgba(13,154,95,.15)", background: "transparent", padding: "10px 0", fontFamily: "'DM Sans'", fontSize: "14px", color: "#1a2a18", outline: "none", borderRadius: 0, width: "90px", cursor: "pointer" }}>{PHONE_CODES.map(c => <option key={c.code} value={c.code}>{c.flag} {c.code}</option>)}</select><input style={{ ...st.inp, flex: 1 }} type="tel" value={phone} onChange={e => setPhone(e.target.value.replace(/[^0-9]/g, ""))} placeholder="6 12 34 56 78" /></div></div>
+              <div style={{ marginTop: "14px" }}><label style={st.lbl}>{t.addrL}</label><input style={st.inp} value={addr} onChange={e => setAddr(e.target.value)} placeholder="12 rue de la Paix" /></div>
+              <div style={{ marginTop: "14px", display: "flex", gap: "12px" }}><div style={{ flex: 2 }}><label style={st.lbl}>{t.cityL}</label><input style={st.inp} value={city} onChange={e => setCity(e.target.value)} /></div><div style={{ flex: 1 }}><label style={st.lbl}>{t.zipL}</label><input style={st.inp} value={zip} onChange={e => setZip(e.target.value)} /></div></div>
+              <div style={{ marginTop: "14px" }}><label style={st.lbl}>{t.countryL}</label><input style={st.inp} value={country} onChange={e => setCountry(e.target.value)} /></div>{att === "yes" && <div style={{ marginTop: "16px" }}><label style={st.lbl}>{t.diet}</label><DietMultiSelect value={di} onChange={setDi} otVal={diOt} onOtChange={setDiOt} errOt={errs.diOt} t={t} /></div>}</div>
             {att === "yes" && <><div style={{ marginBottom: "16px" }}><label style={st.lbl}>{t.compQ}</label><div style={st.togWrap}><button style={st.tog(hasCo, "yes")} onClick={() => setHasCo(true)}>{t.oui}</button><button style={st.tog(!hasCo, "no")} onClick={() => setHasCo(false)}>{t.non}</button></div></div>{hasCo && <div style={st.card}><div style={{ fontFamily: "'Cormorant Garamond'", fontSize: "16px", fontStyle: "italic", marginBottom: "12px", paddingBottom: "8px", borderBottom: "1px solid rgba(13,154,95,.06)" }}>♡ {t.compT}</div><div style={st.row2}><div><label style={st.lbl}>{t.fn}</label><input style={st.inp} value={coFn} onChange={e => setCoFn(e.target.value)} /><Err show={errs.coFn} text={t.req} /></div><div><label style={st.lbl}>{t.ln}</label><input style={st.inp} value={coLn} onChange={e => setCoLn(e.target.value)} /><Err show={errs.coLn} text={t.req} /></div></div><div style={{ marginTop: "14px" }}><label style={st.lbl}>{t.diet}</label><DietMultiSelect value={coDi} onChange={setCoDi} otVal={coDiOt} onOtChange={setCoDiOt} t={t} /></div></div>}<div style={{ marginBottom: "16px" }}><label style={st.lbl}>{t.childQ}</label><div style={st.togWrap}><button style={st.tog(hasCh, "yes")} onClick={() => setHasCh(true)}>{t.oui}</button><button style={st.tog(!hasCh, "no")} onClick={() => setHasCh(false)}>{t.non}</button></div></div>{hasCh && <>{kids.map((kid, i) => <div key={kid.id} style={st.card}><div style={{ fontFamily: "'Cormorant Garamond'", fontSize: "16px", fontStyle: "italic", marginBottom: "12px", paddingBottom: "8px", borderBottom: "1px solid rgba(13,154,95,.06)" }}>★ {t.childT} {i + 1}</div><div style={st.row2}><div><label style={st.lbl}>{t.childN}</label><input style={st.inp} value={kid.name} onChange={e => updateKid(i, "name", e.target.value)} /><Err show={errs["cn" + i]} text={t.req} /></div><div><label style={st.lbl}>{t.childA}</label><input style={st.inp} type="number" min="0" max="17" value={kid.age} onChange={e => updateKid(i, "age", e.target.value)} /><Err show={errs["ca" + i]} text={t.req} /></div></div><div style={{ marginTop: "12px" }}><label style={st.lbl}>{t.diet}</label><DietMultiSelect value={Array.isArray(kid.diet) ? kid.diet : [kid.diet || "standard"]} onChange={v => updateKid(i, "diet", v)} otVal={kid.dietOt || ""} onOtChange={v => updateKid(i, "dietOt", v)} t={t} /></div>{kids.length > 1 && <div style={{ textAlign: "right", marginTop: "8px" }}><button style={st.rmBtn} onClick={() => removeKid(i)}>{t.rmChild} ✗</button></div>}</div>)}<button style={st.addBtn} onClick={addKid}>{t.addChild}</button><div style={{ background: "rgba(200,169,46,.08)", borderRadius: "12px", padding: "10px 14px", fontSize: "12px", color: "#6a5a20", lineHeight: 1.6, marginBottom: "16px" }}>👶 {t.childMenuNote}</div></>}</>}
             {att === "no" && <div style={{ marginTop: "16px" }}><label style={st.lbl}>{t.msgL}</label><textarea style={st.ta} value={msg} onChange={e => setMsg(e.target.value)} placeholder={t.msgPh} /></div>}
             <NavBtns showSend={att === "no" && step === totalSteps - 1} />
@@ -604,7 +716,7 @@ export default function App() {
   );
 
   /* ═══ SUCCESS ═══ */
-  if (view === "success") return (
+  return (
     <div style={st.root}><style>{CSS}</style><div ref={topRef} />
       <div style={st.hero}><div style={st.heroBg} /><div style={{ position: "relative", zIndex: 1 }}><div style={st.namesLine}>Manon <span style={st.ampI}>&</span> Sebastian</div></div></div>
       <div className="fu" style={{ textAlign: "center", padding: "3rem 1.5rem" }}>
@@ -621,9 +733,6 @@ export default function App() {
       <Footer />
     </div>
   );
-
-
-  return null;
 }
 
 /* ═══ STYLES ═══ */
@@ -637,7 +746,6 @@ const st = {
   ampI: { color: "#c8a92e", fontStyle: "normal", fontWeight: 500, margin: "0 6px", fontSize: "36px" },
   form: { maxWidth: "520px", margin: "0 auto", padding: "0 1.5rem 2rem" },
   lbl: { display: "block", fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "#4a6a40", marginBottom: "5px", fontWeight: 600 },
-  badge: { fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#0d9a5f", background: "rgba(13,154,95,.1)", padding: "3px 10px", borderRadius: "20px", fontWeight: 700 },
   inp: { width: "100%", border: "none", borderBottom: "2px solid rgba(13,154,95,.15)", background: "transparent", padding: "10px 0", fontFamily: "'DM Sans'", fontSize: "15px", fontWeight: 400, color: "#1a2a18", outline: "none", borderRadius: 0 },
   ta: { width: "100%", border: "2px solid rgba(13,154,95,.1)", background: "rgba(255,255,255,.5)", padding: "12px 14px", fontFamily: "'DM Sans'", fontSize: "15px", fontWeight: 400, color: "#1a2a18", outline: "none", borderRadius: "14px", resize: "none", height: "80px" },
   row2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" },
