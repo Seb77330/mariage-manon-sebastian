@@ -259,7 +259,7 @@ async function sendEmailJS(entry, lang) {
 
 /* ═══ CONFIG ═══ */
 const CAGNOTTE_URL = "";
-const RSVP_DEADLINE = "2026-06-20";
+const RSVP_DEADLINE = "2026-06-21";
 // Image bannière : déposer le fichier dans le dossier `public/` de ton projet
 // (par exemple `public/moulin.jpg`), puis garder le chemin tel quel ci-dessous.
 const MOULIN_IMG = "/moulin.jpg";
@@ -420,7 +420,9 @@ const TR = {
     deleteConfirm: "Voulez-vous vraiment supprimer ce profil ?", deleteBtn: "Supprimer", close: "Annuler",
     nFS: "Ven→Dim", nSS: "Sam→Dim", noAc: "–", p1: "+1", yrs: "ans", ch: "enfant", chs: "enfants", mFor: "Menu de",
     detEntree: "Entrée", detPlat: "Plat", detGar: "Garnitures", detDessert: "Dessert", detAlc: "Alcool", detAc: "Hébergement", detBf: "Petit-déj", detBbq: "BBQ", detMsg: "Message", detComp: "Accompagnant", detChildren: "Enfants", detDiet: "Régime",
-    deadlineMsg: "Merci de confirmer avant le 20 juin 2026",
+    deadlineMsg: "Merci de confirmer avant le 21 juin 2026 à 3 heures du matin",
+    closedMsg1: "Désolé, il n'est plus possible de répondre aux invitations.",
+    closedMsg2: "Les infos viennent de partir au traiteur.",
     faqT: "Questions fréquentes",
     exportBtn: "📥 Exporter CSV", mealCountT: "Compteur plats",
     loveT: "Notre histoire", loveSoon: "À venir...",
@@ -478,7 +480,9 @@ const TR = {
     deleteConfirm: "Are you sure you want to delete this profile?", deleteBtn: "Delete", close: "Cancel",
     nFS: "Fri→Sun", nSS: "Sat→Sun", noAc: "–", p1: "+1", yrs: "y/o", ch: "child", chs: "children", mFor: "Menu for",
     detEntree: "Starter", detPlat: "Main", detGar: "Sides", detDessert: "Dessert", detAlc: "Alcohol", detAc: "Accommodation", detBf: "Breakfast", detBbq: "BBQ", detMsg: "Message", detComp: "Companion", detChildren: "Children", detDiet: "Diet",
-    deadlineMsg: "Please confirm before June 20, 2026",
+    deadlineMsg: "Please confirm before June 21, 2026 at 3 AM",
+    closedMsg1: "Sorry, RSVPs are now closed.",
+    closedMsg2: "The final guest count has already been sent to the caterer.",
     faqT: "Frequently asked questions",
     exportBtn: "📥 Export CSV", mealCountT: "Meal counter",
     loveT: "Our story", loveSoon: "Coming soon...",
@@ -589,7 +593,7 @@ export default function App() {
   const t = TR[lang];
 
   // Deadline check
-  const isExpired = new Date() > new Date(RSVP_DEADLINE + "T23:59:59");
+  const isExpired = new Date() > new Date(RSVP_DEADLINE + "T03:00:00");
 
   useEffect(() => { try { setRsvps(JSON.parse(localStorage.getItem("ms_rsvps_v30") || "[]")); } catch(e){} }, []);
   const save = (l) => { setRsvps(l); try { localStorage.setItem("ms_rsvps_v30", JSON.stringify(l)); } catch(e){} };
@@ -709,7 +713,7 @@ export default function App() {
           {step === 3 && att === "yes" && <><div style={{ fontSize: "13px", color: "#5a6a50", textAlign: "center", marginBottom: "20px" }}>{t.recapD}</div><div style={st.card}>{[["👤", `${fn} ${ln}`, dl(di)], hasCo && ["♡", `${coFn} ${coLn}`, dl(coDi)], ...(hasCh ? kids.map(k => ["★", `${k.name} (${k.age} ${t.yrs})`, dl(Array.isArray(k.diet) ? k.diet : [k.diet])]) : []), ["🍷", t.alcQ, (alc.length && !alc.includes("none")) ? alc.map(a => t.alc[a] || a).join(", ") : t.alcNon], ["🏡", t.acT, accom === "none" ? t.acN : (accom === "fri-sun" ? t.acFS : t.acSS) + ` (${roomSize === "3" ? t.pr3 : t.pr12})`], (bfSat + bfSun) > 0 && ["🥐", t.bfT, `${bfSat > 0 ? (lang === "fr" ? "Sam" : "Sat") + ": " + bfSat + " pers." : ""}${bfSat > 0 && bfSun > 0 ? " · " : ""}${bfSun > 0 ? (lang === "fr" ? "Dim" : "Sun") + ": " + bfSun + " pers." : ""} = ${(bfSat + bfSun) * 8} €`], bbq === "yes" && ["🔥", "BBQ", "✓"], msg && ["💌", t.msgL, msg]].filter(Boolean).map(([ic, label, detail], i) => <div key={i} style={{ display: "flex", gap: "12px", padding: "10px 0", borderBottom: "1px solid rgba(0,0,0,.04)", alignItems: "flex-start" }}><span style={{ fontSize: "18px", width: "28px", textAlign: "center", flexShrink: 0 }}>{ic}</span><div><div style={{ fontSize: "14px", fontWeight: 600 }}>{label}</div>{detail && <div style={{ fontSize: "12px", color: "#5a6a50", marginTop: "2px" }}>{detail}</div>}</div></div>)}</div><NavBtns showSend /></>}
           {step === 1 && att === "no" && <><div style={{ textAlign: "center", padding: "20px 0" }}><div style={{ fontSize: "40px", marginBottom: "12px" }}>💌</div><div style={{ fontFamily: "'Cormorant Garamond'", fontSize: "20px", fontStyle: "italic", marginBottom: "16px" }}>{fn}, {lang === "fr" ? "confirmez-vous ne pas pouvoir venir ?" : "do you confirm you can't make it?"}</div>{msg && <div style={{ background: "rgba(0,0,0,.03)", borderRadius: "12px", padding: "12px 16px", fontSize: "14px", fontStyle: "italic", color: "#4a5a48" }}>« {msg} »</div>}</div><NavBtns showSend /></>}
         </div>
-      </div> : <div style={{ textAlign: "center", padding: "40px 20px" }}><div style={{ fontSize: "32px", marginBottom: "12px" }}>⏰</div><div style={{ fontFamily: "'Cormorant Garamond'", fontSize: "22px", fontStyle: "italic", color: "#d44" }}>{t.deadlineMsg}</div></div>}
+      </div> : <div style={{ textAlign: "center", padding: "40px 20px" }}><div style={{ fontSize: "32px", marginBottom: "12px" }}>⏰</div><div style={{ fontFamily: "'Cormorant Garamond'", fontSize: "22px", fontStyle: "italic", color: "#d44" }}>{t.closedMsg1}<br />{t.closedMsg2}</div></div>}
       <Footer />
       <FAQSection lang={lang} t={t} />
     </div>
